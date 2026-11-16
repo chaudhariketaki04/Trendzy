@@ -1,8 +1,42 @@
+<<<<<<< HEAD
 import { productService } from './productService.js';
 import { products as fallbackProducts } from '../../frontend/data/products.js';
 
 // Helper to determine gender target
 function getProductGender(product) {
+=======
+import { products as localProducts } from '../data/products.js';
+
+// Cache for style recommendations
+const recommendationsCache = new Map();
+
+// Helper to determine if a product belongs to fashion/clothing/styling categories
+export function isStyleableProduct(product) {
+  if (!product) return false;
+  const category = (product.category || '').toLowerCase();
+  const subcategory = (product.subcategory || '').toLowerCase();
+  const name = (product.name || '').toLowerCase();
+
+  // Non-styleable electronics / home appliances / grocery
+  const nonStyleable = ['electronics', 'home & kitchen', 'grocery', 'appliances'];
+  if (nonStyleable.includes(category)) return false;
+
+  const styleKeywords = [
+    'top', 'shirt', 'kurti', 'saree', 'dress', 'jeans', 'trouser', 'pant',
+    'jacket', 'coat', 'blazer', 'skirt', 'palazzo', 'legging', 'churidar',
+    'sneaker', 'shoes', 'heels', 'jutti', 'sandals', 'bag', 'jewellery',
+    'necklace', 'earring', 'watch', 'hoodie', 'activewear', 'suit'
+  ];
+
+  return (
+    ['women', 'men', 'kids', 'footwear', 'accessories'].includes(category) ||
+    styleKeywords.some(kw => subcategory.includes(kw) || name.includes(kw))
+  );
+}
+
+// Helper to determine gender target
+export function getProductGender(product) {
+>>>>>>> f46c5d5a59d10fc40292827b0900c1bcf3940211
   if (!product) return 'unisex';
   const cat = (product.category || '').toLowerCase();
   if (cat === 'women') return 'women';
@@ -37,8 +71,13 @@ function getProductGender(product) {
   return 'unisex';
 }
 
+<<<<<<< HEAD
 // Classifier for fashion slot detection
 function classifyProduct(product) {
+=======
+// Classifier for clothing and styling items
+export function classifyFashionItem(product) {
+>>>>>>> f46c5d5a59d10fc40292827b0900c1bcf3940211
   if (!product) return 'other';
   const name = (product.name || '').toLowerCase();
   const cat = (product.category || '').toLowerCase();
@@ -238,6 +277,7 @@ function getOutfitRole(slot) {
   return slot;
 }
 
+<<<<<<< HEAD
 export const styleRecommendationService = {
   async getRecommendations({ productId, occasion = 'casual', style = 'casual', budget = 'all', color = 'any' }) {
     let allProducts = [];
@@ -275,11 +315,114 @@ export const styleRecommendationService = {
         target: p,
         base: selectedProduct,
         targetType: slot,
+=======
+// Local recommendation engine executing rule-based scoring
+export function getLocalRecommendations({
+  productId,
+  occasion = 'casual',
+  style = 'casual',
+  budget = 'all',
+  color = 'any',
+  productList = localProducts,
+}) {
+  const selectedProduct = productList.find(p => p.id === productId) || localProducts[0];
+  if (!selectedProduct) {
+    throw new Error(`Product ${productId} not found`);
+  }
+
+  const baseType = classifyFashionItem(selectedProduct);
+  const baseRole = getOutfitRole(baseType);
+  const complementarySlots = getComplementarySlots(baseType);
+
+  const roleCandidates = {};
+  for (const p of productList) {
+    if (!p.inStock) continue;
+    if (p.id === selectedProduct.id) continue;
+
+    const slot = classifyFashionItem(p);
+    if (!complementarySlots.includes(slot)) continue;
+
+    const role = getOutfitRole(slot);
+    // Avoid recommending same role as base item (e.g. don't recommend a bottom for a bottom)
+    if (role === baseRole) continue;
+
+    const score = calculateScore({
+      target: p,
+      base: selectedProduct,
+      targetType: slot,
+      occasion,
+      style,
+      budget,
+      color,
+    });
+
+    if (score <= 0) continue;
+
+    if (!roleCandidates[role]) roleCandidates[role] = [];
+    roleCandidates[role].push({
+      product: p,
+      slot,
+      role,
+      matchScore: score,
+      reason: generateStylingReason(p, selectedProduct, slot, occasion),
+    });
+  }
+
+  const recommendations = [];
+  const rolesPriority = ['bottom', 'top', 'footwear', 'bag', 'accessory', 'outerwear', 'main_wear'];
+  
+  for (const role of rolesPriority) {
+    if (roleCandidates[role] && roleCandidates[role].length > 0) {
+      roleCandidates[role].sort((a, b) => b.matchScore - a.matchScore);
+      recommendations.push(roleCandidates[role][0]);
+    }
+  }
+
+  // Also include any other valid roles
+  for (const role in roleCandidates) {
+    if (!rolesPriority.includes(role) && roleCandidates[role].length > 0) {
+      roleCandidates[role].sort((a, b) => b.matchScore - a.matchScore);
+      recommendations.push(roleCandidates[role][0]);
+    }
+  }
+
+  recommendations.sort((a, b) => b.matchScore - a.matchScore);
+  const selectedOutfit = recommendations.slice(0, 5);
+  const totalPrice = selectedOutfit.reduce((sum, item) => sum + (item.product.price || 0), 0);
+
+  return {
+    selectedProduct,
+    recommendations: selectedOutfit,
+    totalPrice,
+    occasion,
+    style,
+    budget,
+    color,
+  };
+}
+
+export const styleRecommendationService = {
+  async getRecommendations({
+    productId,
+    occasion = 'casual',
+    style = 'casual',
+    budget = 'all',
+    color = 'any',
+  }) {
+    const cacheKey = `${productId}_${occasion}_${style}_${budget}_${color}`;
+    if (recommendationsCache.has(cacheKey)) {
+      return recommendationsCache.get(cacheKey);
+    }
+
+    try {
+      const params = new URLSearchParams({
+>>>>>>> f46c5d5a59d10fc40292827b0900c1bcf3940211
         occasion,
         style,
         budget,
         color,
       });
+<<<<<<< HEAD
 
       if (score <= 0) continue;
 
@@ -327,5 +470,30 @@ export const styleRecommendationService = {
       budget,
       color,
     };
+=======
+      const res = await fetch(`/api/style-recommendations/${productId}?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        recommendationsCache.set(cacheKey, data);
+        return data;
+      }
+      throw new Error(`Server returned ${res.status}`);
+    } catch (err) {
+      // Graceful fallback to client rule-based recommendation engine
+      const localResult = getLocalRecommendations({
+        productId,
+        occasion,
+        style,
+        budget,
+        color,
+      });
+      recommendationsCache.set(cacheKey, localResult);
+      return localResult;
+    }
+  },
+
+  clearCache() {
+    recommendationsCache.clear();
+>>>>>>> f46c5d5a59d10fc40292827b0900c1bcf3940211
   },
 };
